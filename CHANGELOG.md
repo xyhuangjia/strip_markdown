@@ -31,6 +31,7 @@ Tracks upstream [remove-markdown](https://github.com/zuchka/remove-markdown) 0.8
 
 - README documents the new options, MDX import behavior, and upstream
   compatibility.
+- Added a complete Simplified Chinese translation of the README.
 
 ## 1.1.0
 
