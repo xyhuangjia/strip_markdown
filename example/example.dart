@@ -52,4 +52,38 @@ This is **bold** and *italic* text with a [link](https://example.com).
   );
   print('\nWith image alt text:');
   print(withAltText);
+
+  // Replace inline links with their URLs
+  const String linkMarkdown =
+      'Read the [field notes](https://example.com/notes).';
+  final String withUrls = removeMd(
+    linkMarkdown,
+    const RemoveMarkdownOptions(replaceLinksWithURL: true),
+  );
+  print('\nLinks replaced by URLs:');
+  print(withUrls);
+
+  // Keep both link text and URL, joined by a separator
+  final String withSeparator = removeMd(
+    linkMarkdown,
+    const RemoveMarkdownOptions(separateLinksAndTexts: ': '),
+  );
+  print('\nLink text and URL separated:');
+  print(withSeparator);
+
+  // Strip a leading block of MDX import statements
+  const String mdxMarkdown = '''
+import { Card, Button } from "./components";
+import "./styles.css";
+
+# Welcome
+
+A **fresh start**.
+''';
+  final String mdxText = removeMd(
+    mdxMarkdown,
+    const RemoveMarkdownOptions(stripMdxImports: true),
+  );
+  print('\nMDX without leading imports:');
+  print(mdxText);
 }

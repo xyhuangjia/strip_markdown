@@ -1,9 +1,41 @@
-import 'package:strip_markdown/strip_markdown.dart';
+import 'package:strip_markdown/src/entities/remove_markdown_options.dart';
 
+/// Strips Markdown formatting from [md], returning plain text.
+///
+/// On error, the original [md] input is returned unchanged, unless
+/// [RemoveMarkdownOptions.throwError] is set, in which case the error is
+/// rethrown.
 String removeMd(String md, [RemoveMarkdownOptions? options]) {
-  options ??= const RemoveMarkdownOptions();
+  final opts = options ?? const RemoveMarkdownOptions();
 
   String output = md;
+
+  if (opts.stripMdxImports) {
+    // Inspect the original structure before list markers, rules or fences are
+    // removed. This intentionally supports only a leading block of imports,
+    // not all MDX ESM.
+    const identifier = r'[A-Za-z_$][\w$]*';
+    const specifier = '$identifier(?:\\s+as\\s+$identifier)?\\s*';
+    const namedImports =
+        '\\{\\s*(?:$specifier(?:,\\s*$specifier)*(?:,\\s*)?)?\\}';
+    const namespaceImport = '\\*\\s+as\\s+$identifier';
+    const bindings =
+        '(?:$identifier(?:\\s*,\\s*(?:$namedImports|$namespaceImport))?'
+        '|$namedImports|$namespaceImport)';
+    const modulePath =
+        r'''(?:"(?:\\[^\r\n]|[^"\\\r\n])*"|'(?:\\[^\r\n]|[^'\\\r\n])*')''';
+    const blankLines = '(?:[\\t ]*\\r?\\n)*';
+    final importRegex = RegExp(
+      '^${blankLines}import[\\t ]+(?:$bindings\\s+from\\s+)?$modulePath'
+      '[\\t ]*(?:;[\\t ]*)?(?:\\r?\\n|\$)$blankLines',
+    );
+
+    while (true) {
+      final match = importRegex.firstMatch(output);
+      if (match == null) break;
+      output = output.substring(match.end);
+    }
+  }
 
   // Remove horizontal rules (stripListHeaders conflict with this rule, which is why it has been moved to the top)
   output = output.replaceAll(
@@ -15,11 +47,11 @@ String removeMd(String md, [RemoveMarkdownOptions? options]) {
   );
 
   try {
-    if (options.stripListLeaders) {
-      if (options.listUnicodeChar != null) {
+    if (opts.stripListLeaders) {
+      if (opts.listUnicodeChar != null) {
         output = output.replaceAllMapped(
           RegExp(r'^([\s\t]*)([\*\-\+]|\d+\.)\s+', multiLine: true),
-          (match) => '${options!.listUnicodeChar} ${match.group(1) ?? ''}',
+          (match) => '${opts.listUnicodeChar} ${match.group(1) ?? ''}',
         );
       } else {
         output = output.replaceAllMapped(
@@ -29,7 +61,7 @@ String removeMd(String md, [RemoveMarkdownOptions? options]) {
       }
     }
 
-    if (options.gfm) {
+    if (opts.gfm) {
       output = output
           // Header
           .replaceAll(RegExp(r'\n={2,}'), '\n')
@@ -44,17 +76,25 @@ String removeMd(String md, [RemoveMarkdownOptions? options]) {
           );
     }
 
-    if (options.abbr) {
+    if (opts.abbr) {
       // Remove abbreviations
       output = output.replaceAll(RegExp(r'\*\[.*\]:.*\n'), '');
     }
 
     RegExp htmlReplaceRegex = RegExp('<[^>]*>');
-    if (options.htmlTagsToSkip.isNotEmpty) {
+    if (opts.htmlTagsToSkip.isNotEmpty) {
       // Create a regex that matches tags not in htmlTagsToSkip
-      final joinedHtmlTagsToSkip = options.htmlTagsToSkip.join('|');
+      final joinedHtmlTagsToSkip = opts.htmlTagsToSkip.join('|');
       htmlReplaceRegex = RegExp(
         '<(?!\\/?($joinedHtmlTagsToSkip)(?=>|\\s[^>]*>))[^>]*>',
+      );
+    }
+
+    final separator = opts.separateLinksAndTexts;
+    if (separator != null && separator.isNotEmpty) {
+      output = output.replaceAllMapped(
+        RegExp(r'\[([^\]]+)\]\(([^)]+)\)'),
+        (match) => '${match.group(1) ?? ''}$separator${match.group(2) ?? ''}',
       );
     }
 
@@ -69,12 +109,15 @@ String removeMd(String md, [RemoveMarkdownOptions? options]) {
         // Remove images
         .replaceAllMapped(
           RegExp(r'\!\[(.*?)\][\[\(].*?[\]\)]'),
-          (match) => options!.useImgAltText ? (match.group(1) ?? '') : '',
+          (match) => opts.useImgAltText ? (match.group(1) ?? '') : '',
         )
-        // Remove inline links
+        // Remove inline links. Nested brackets in the link text are matched so
+        // that `[link [with brackets]](url)` keeps its text, while a lone
+        // bracket pair elsewhere on the line (e.g. `[note] and [link](url)`)
+        // cannot swallow the following link.
         .replaceAllMapped(
-          RegExp(r'\[([^\]]*?)\][\[\(].*?[\]\)]'),
-          (match) => options!.replaceLinksWithURL
+          RegExp(r'\[((?:[^\[\]]|\[[^\[\]]*\])*)\]\s*[\(\[](.*?)[\)\]]'),
+          (match) => opts.replaceLinksWithURL
               ? (match.group(2) ?? '')
               : (match.group(1) ?? ''),
         )
@@ -120,9 +163,9 @@ String removeMd(String md, [RemoveMarkdownOptions? options]) {
         // Replace strike through
         .replaceAllMapped(RegExp('~(.*?)~'), (match) => match.group(1) ?? '');
   } catch (e) {
-    if (options.throwError) rethrow;
+    if (opts.throwError) rethrow;
 
-    //print('remove-markdown encountered error: $e');
+    // print('remove-markdown encountered error: $e');
     return md;
   }
 
