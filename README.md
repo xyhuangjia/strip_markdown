@@ -1,12 +1,15 @@
 # Strip Markdown
 
+[![pub package](https://img.shields.io/pub/v/strip_markdown.svg)](https://pub.dev/packages/strip_markdown)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 [简体中文](#简体中文) | [English](#english)
 
 # 简体中文
 
 ## 这是什么？
 
-**strip_markdown** 是一个 Dart 包，用于移除（剥离）文本中的 Markdown 格式。它是流行的 Node.js [remove-markdown](https://github.com/zuchka/remove-markdown) 包的 Dart 移植版，当前对齐上游 **0.8.0** 版本。
+**strip_markdown** 是一个 Dart 包，用于移除（剥离）文本中的 Markdown 格式，既支持完整字符串，也支持流式（```Stream<String>```）输入。它是流行的 Node.js [remove-markdown](https://github.com/zuchka/remove-markdown) 包的 Dart 移植版，当前对齐上游 **0.8.0** 版本。
 
 *Markdown 格式*大体上指所有看起来不像普通文本的内容，比如方括号、星号、井号等。
 
@@ -85,6 +88,44 @@ final plainText = removeMd(markdown, const RemoveMarkdownOptions(
 
 将 ```htmlTagsToSkip``` 设为 HTML 标签名列表时，会保留这些标签（包括带属性的标签），而不是移除它们。标签名按精确名称匹配，因此跳过 ```code``` 不会保留 ```codes```。
 
+## 流式处理（Stream）
+
+当 Markdown 以流（```Stream<String>```）的形式到达时——例如网络响应、分块读取的文件或大模型逐 token 输出——可以使用 ```removeMdStream``` 或 ```RemoveMarkdownTransformer``` 边接收边转换：
+
+```dart
+import 'dart:io';
+
+final Stream<String> plainText = removeMdStream(
+  markdownStream, // Stream<String>
+);
+
+await for (final chunk in plainText) {
+  stdout.write(chunk); // 每个 chunk 都是已剥离 Markdown 的纯文本
+}
+```
+
+也可以直接作为 ```StreamTransformer``` 使用：
+
+```dart
+final plainText = markdownStream.transform(const RemoveMarkdownTransformer());
+```
+
+如果需要一次性拿到完整结果，直接 ```join()``` 即可：
+
+```dart
+final String text = await removeMdStream(markdownStream).join();
+```
+
+行为说明：
+
+- **任意切分**：输入可以在任意位置切分（包括逐个字符切分），跨 chunk 边界的 Markdown 语法同样会被正确移除。
+- **段级缓冲**：输出会缓冲到段落边界（代码围栏之外的空白行）后再剥离并发出，因此通常只滞后输入一个段落；代码围栏内部的空白行不会触发切分。
+- **结果一致**：对段落内构造，流式输出拼接后与 ```removeMd(完整文档)``` 的结果完全一致。
+- **选项完整**：所有 ```RemoveMarkdownOptions``` 选项均生效（包括 ```stripMdxImports```）。
+- **错误与取消**：源流的错误会原样转发到输出流；取消订阅会终止转换并丢弃未发出的缓冲数据。
+
+如果 Markdown 结构跨越空白行（例如跨空行的多行内联链接），流式输出与全量结果可能不同；需要严格的全量语义时，请先收集完整文本再调用 ```removeMd```。
+
 ## MDX 导入
 
 将 ```stripMdxImports``` 设为 ```true``` 会移除文档开头的一整块默认导入、具名导入、命名空间导入或副作用导入：
@@ -105,6 +146,15 @@ print(removeMd(markdown, const RemoveMarkdownOptions(stripMdxImports: true)));
 
 这个保守的过滤器会在遇到其他内容或不支持的导入语法（例如注释、import 属性）时停止。标题或其他内容之后的导入会保留在输出中。列表和代码块中的导入仍按常规的 Markdown 剥离行为处理。该选项默认值为 ```false```。
 
+## API
+
+| API | 说明 |
+| --- | --- |
+| `removeMd(String md, [RemoveMarkdownOptions? options])` | 剥离完整字符串中的 Markdown，返回纯文本 |
+| `removeMdStream(Stream<String> markdown, [RemoveMarkdownOptions? options])` | 将 Markdown 文本流转换为纯文本流 |
+| `RemoveMarkdownTransformer([RemoveMarkdownOptions options])` | `StreamTransformer<String, String>`，可配合 `Stream.transform` 使用 |
+| `RemoveMarkdownOptions` | 选项对象，包含上一节列出的全部选项 |
+
 ## 功能
 
 本包支持移除：
@@ -119,7 +169,20 @@ print(removeMd(markdown, const RemoveMarkdownOptions(stripMdxImports: true)));
 - 删除线
 - 缩写定义
 - 文档开头的 MDX/ESM 导入语句（需开启选项）
+- 流式处理：```Stream<String>``` 输入的增量转换
 - 以及更多！
+
+## 从 1.1.0 升级
+
+1.2.0 与上游 remove-markdown 0.8.0 对齐，并新增流式输入，全部向后兼容：
+
+- 新增 `stripMdxImports`、`separateLinksAndTexts` 选项
+- 新增 `removeMdStream` 与 `RemoveMarkdownTransformer` 流式 API
+- 修复 `replaceLinksWithURL` 之前会丢失链接内容的问题
+- 恢复链接文本包含方括号时的正确剥离
+- README 提供完整简体中文说明
+
+完整变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 上游兼容性
 
@@ -147,7 +210,7 @@ MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
 # English
 
 ## What is it?
-**strip_markdown** is a Dart package that removes (strips) Markdown formatting from text. This is a port of the popular Node.js [remove-markdown](https://github.com/zuchka/remove-markdown) package, currently tracking upstream version **0.8.0**.
+**strip_markdown** is a Dart package that removes (strips) Markdown formatting from text, for both complete strings and streaming (`Stream<String>`) input. This is a port of the popular Node.js [remove-markdown](https://github.com/zuchka/remove-markdown) package, currently tracking upstream version **0.8.0**.
 
 *Markdown formatting* means pretty much anything that doesn't look like regular text, like square brackets, asterisks, hash symbols, etc.
 
@@ -225,6 +288,44 @@ Setting ```separateLinksAndTexts``` to a non-empty string keeps both the text an
 
 Setting ```htmlTagsToSkip``` to a list of HTML tag names preserves those tags (including tags with attributes) instead of removing them. Tag names are matched exactly, so skipping ```code``` does not preserve ```codes```.
 
+## Streaming input
+
+When Markdown arrives as a `Stream<String>` - for example a network response, a file read in chunks, or tokens streamed from an LLM - use ```removeMdStream``` or ```RemoveMarkdownTransformer``` to strip it as the data arrives:
+
+```dart
+import 'dart:io';
+
+final Stream<String> plainText = removeMdStream(
+  markdownStream, // Stream<String>
+);
+
+await for (final chunk in plainText) {
+  stdout.write(chunk); // every chunk is already stripped plain text
+}
+```
+
+The transformer can also be used directly:
+
+```dart
+final plainText = markdownStream.transform(const RemoveMarkdownTransformer());
+```
+
+To get the complete result at once, just `join()` the stream:
+
+```dart
+final String text = await removeMdStream(markdownStream).join();
+```
+
+Behavior:
+
+- **Arbitrary chunking**: chunks may split the Markdown at any position (including one character at a time); Markdown syntax that spans chunk boundaries is still removed.
+- **Paragraph buffering**: output is buffered until a paragraph boundary (a blank line outside a fenced code block), stripped, and emitted, so conversion usually lags the input by a single paragraph. Blank lines inside fenced code blocks never trigger a split.
+- **Same result**: for paragraph-oriented Markdown, the joined streamed output is identical to ```removeMd``` on the complete document.
+- **All options**: every ```RemoveMarkdownOptions``` option is supported (including ```stripMdxImports```).
+- **Errors and cancellation**: errors from the source stream are forwarded unchanged; cancelling the subscription stops the conversion and drops buffered text.
+
+If a Markdown construct spans blank lines (for example a multiline inline link), the streamed output may differ from calling ```removeMd``` on the complete document; collect the input first and call ```removeMd``` when exact document-level semantics are required.
+
 ## MDX imports
 
 Setting ```stripMdxImports``` to ```true``` removes a leading block of default, named, namespace, or side-effect MDX/ESM imports:
@@ -245,6 +346,15 @@ Named imports can span multiple lines and include aliases and trailing commas. S
 
 This conservative filter stops at the first other content or unsupported import syntax, such as comments or import attributes. Imports after headings or other content remain in the output. Imports in lists and code blocks retain the usual Markdown-stripping behavior. This option defaults to ```false```.
 
+## API reference
+
+| API | Description |
+| --- | --- |
+| `removeMd(String md, [RemoveMarkdownOptions? options])` | Strips Markdown from a complete string and returns plain text |
+| `removeMdStream(Stream<String> markdown, [RemoveMarkdownOptions? options])` | Converts a Markdown text stream into a plain-text stream |
+| `RemoveMarkdownTransformer([RemoveMarkdownOptions options])` | A `StreamTransformer<String, String>` for use with `Stream.transform` |
+| `RemoveMarkdownOptions` | Options object with all options listed above |
+
 ## Features
 
 This package supports removing:
@@ -259,7 +369,20 @@ This package supports removing:
 - Strikethrough text
 - Abbreviations
 - Leading MDX/ESM import statements (opt-in)
+- Streaming input: incremental conversion of `Stream<String>`
 - And more!
+
+## Upgrading from 1.1.0
+
+1.2.0 tracks upstream remove-markdown 0.8.0 and adds streaming input; everything is backwards compatible:
+
+- New `stripMdxImports` and `separateLinksAndTexts` options
+- New `removeMdStream` and `RemoveMarkdownTransformer` streaming API
+- Fixed `replaceLinksWithURL` dropping link content
+- Restored stripping of links whose text contains square brackets
+- Complete Simplified Chinese documentation in the README
+
+See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Upstream compatibility
 

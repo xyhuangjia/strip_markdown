@@ -1,6 +1,7 @@
 ## 1.2.0
 
-Tracks upstream [remove-markdown](https://github.com/zuchka/remove-markdown) 0.8.0.
+Tracks upstream [remove-markdown](https://github.com/zuchka/remove-markdown) 0.8.0
+and adds streaming input support.
 
 ### Added
 
@@ -10,8 +11,19 @@ Tracks upstream [remove-markdown](https://github.com/zuchka/remove-markdown) 0.8
   LF/CRLF line endings, and stops at other content or unsupported syntax.
 - `separateLinksAndTexts` option to replace an inline link with its text, a
   custom separator, and its URL (e.g. `[text](url)` becomes `text: url`).
-- Dartdoc for every `RemoveMarkdownOptions` field and for `removeMd`.
-- Regression tests for all upstream 0.8.0 behaviors.
+- `removeMdStream` and `RemoveMarkdownTransformer` convert a `Stream<String>`
+  of Markdown chunks into a stream of plain-text chunks. Chunks may split the
+  Markdown at any position and Markdown syntax spanning chunk boundaries is
+  still removed: input is buffered until a paragraph boundary outside fenced
+  code blocks, stripped, and emitted.
+- The joined streamed output matches `removeMd` on the complete document for
+  paragraph-oriented Markdown, including CRLF input, fenced code blocks with
+  blank lines, MDX imports, and every option.
+- Dartdoc for every `RemoveMarkdownOptions` field, for `removeMd`, and for the
+  streaming API.
+- Regression tests for all upstream 0.8.0 behaviors and for streaming input
+  (arbitrary chunkings, incremental emission, MDX imports, options, error
+  forwarding, and the `StreamTransformer` API).
 
 ### Fixed
 
@@ -27,12 +39,18 @@ Tracks upstream [remove-markdown](https://github.com/zuchka/remove-markdown) 0.8
   are preserved and tag names are matched exactly (skipping `code` does not
   preserve `<codes>`).
 
+### Changed
+
+- The document-leading MDX import stripping is shared between `removeMd` and
+  the streaming converter. `removeMd` behavior is unchanged.
+
 ### Documentation
 
-- README documents the new options, MDX import behavior, and upstream
-  compatibility.
+- README documents the new options, MDX import behavior, streaming input, and
+  upstream compatibility.
 - README now leads with a complete Simplified Chinese translation, followed
   by the English documentation.
+- The example demonstrates `removeMdStream` and `RemoveMarkdownTransformer`.
 
 ## 1.1.0
 

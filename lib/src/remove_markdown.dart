@@ -1,4 +1,5 @@
 import 'package:strip_markdown/src/entities/remove_markdown_options.dart';
+import 'package:strip_markdown/src/mdx_imports.dart';
 
 /// Strips Markdown formatting from [md], returning plain text.
 ///
@@ -12,29 +13,8 @@ String removeMd(String md, [RemoveMarkdownOptions? options]) {
 
   if (opts.stripMdxImports) {
     // Inspect the original structure before list markers, rules or fences are
-    // removed. This intentionally supports only a leading block of imports,
-    // not all MDX ESM.
-    const identifier = r'[A-Za-z_$][\w$]*';
-    const specifier = '$identifier(?:\\s+as\\s+$identifier)?\\s*';
-    const namedImports =
-        '\\{\\s*(?:$specifier(?:,\\s*$specifier)*(?:,\\s*)?)?\\}';
-    const namespaceImport = '\\*\\s+as\\s+$identifier';
-    const bindings =
-        '(?:$identifier(?:\\s*,\\s*(?:$namedImports|$namespaceImport))?'
-        '|$namedImports|$namespaceImport)';
-    const modulePath =
-        r'''(?:"(?:\\[^\r\n]|[^"\\\r\n])*"|'(?:\\[^\r\n]|[^'\\\r\n])*')''';
-    const blankLines = '(?:[\\t ]*\\r?\\n)*';
-    final importRegex = RegExp(
-      '^${blankLines}import[\\t ]+(?:$bindings\\s+from\\s+)?$modulePath'
-      '[\\t ]*(?:;[\\t ]*)?(?:\\r?\\n|\$)$blankLines',
-    );
-
-    while (true) {
-      final match = importRegex.firstMatch(output);
-      if (match == null) break;
-      output = output.substring(match.end);
-    }
+    // removed.
+    output = stripLeadingMdxImports(output);
   }
 
   // Remove horizontal rules (stripListHeaders conflict with this rule, which is why it has been moved to the top)

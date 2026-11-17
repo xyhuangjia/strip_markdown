@@ -2,7 +2,7 @@
 
 import 'package:strip_markdown/strip_markdown.dart';
 
-void main() {
+Future<void> main() async {
   // Basic markdown removal
   const String markdown = '''
 # Heading
@@ -86,4 +86,24 @@ A **fresh start**.
   );
   print('\nMDX without leading imports:');
   print(mdxText);
+
+  // Strip Markdown that arrives as a stream of chunks, for example tokens
+  // streamed from an LLM or a network response.
+  final Stream<String> markdownStream = Stream<String>.fromIterable([
+    '# Live update\n\n',
+    'Markdown can arrive in **any number ',
+    'of chunks**, so plain text is emitted ',
+    'paragraph by paragraph.\n\n',
+    'The end.',
+  ]);
+  final String streamedText = await removeMdStream(markdownStream).join();
+  print('\nStreamed markdown, stripped:');
+  print(streamedText);
+
+  // The transformer can also be plugged into an existing stream pipeline.
+  final String transformed = await markdownStream
+      .transform(const RemoveMarkdownTransformer())
+      .join();
+  print('\nStreamed through RemoveMarkdownTransformer:');
+  print(transformed);
 }
